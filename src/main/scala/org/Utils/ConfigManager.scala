@@ -18,6 +18,3 @@ object ConfigManager {
     prop.getProperty(key)
   }
 }
-object Test extends App {
-  println(ConfigManager.getProp("bootstrap.server"))
-}
