@@ -21,7 +21,7 @@ object BussinessApp extends App {
   val broad = ssc.sparkContext.broadcast(citymap)
   val stream = StreamDirect.getStream(ssc)
   stream.foreachRDD(rdd=>StreamDirect.handleAndSaveOffset(rdd
-    ,(BussinessHandle.middleArgsRDD _).curried(broad.value)
+    ,(BussinessHandle.middleArgsRDD _).curried(broad)
     ,BussinessHandle.result01_01
     ,BussinessHandle.result01_02
     ,BussinessHandle.result02

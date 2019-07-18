@@ -2,7 +2,7 @@ package org.handle
 
 import org.Utils.{JDBCUtiles, JedisConnectionPool, TimeSubUtils}
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.spark.rdd
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 
 import scala.util.parsing.json.JSON
@@ -17,7 +17,7 @@ object BussinessHandle {
     resrdd.map(_.value()).foreach(println)
   }
   //将stream转换为需要的参数（天，时，分钟，省份，List（订单数，充值金额，充值成功数，时长））
-  def middleArgsRDD(cityMap:Map[String,String],initrdd: RDD[ConsumerRecord[String, String]]): RDD[(String, String, String, String, List[Double])] ={
+  def middleArgsRDD(cityMap:Broadcast[Map[String,String]], initrdd: RDD[ConsumerRecord[String, String]]): RDD[(String, String, String, String, List[Double])] ={
     //解析JSON
     initrdd.map(_.value()).map(t=>JSON.parseFull(t).get.asInstanceOf[Map[String,Any]])
     //过滤需要的数据
@@ -29,7 +29,7 @@ object BussinessHandle {
       val feecount = if(result.equals("0000")) 1 else 0 //充值成功数
       val starttime = map.get("requestId").get.toString //开始充值时间
       val stoptime = map.get("receiveNotifyTime").get.toString //结束充值时间
-      val province = cityMap.get(map.get("pro").get.toString).get.toString//省份
+      val province = cityMap.value.get(map.get("provinceCode").get.toString).get//省份
       val duration = TimeSubUtils.getDuration(starttime,stoptime)
       (starttime.substring(0,8),starttime.substring(0,10),starttime.substring(0,12),province,List[Double](1,money,feecount,duration))
     }).cache()
@@ -57,6 +57,7 @@ object BussinessHandle {
         f.foreach(t=>{
           jedis.hincrBy("20170412minute",t._1,t._2.toLong)
         })
+        jedis.close()
       })
   }
   def result02(lines:RDD[(String, String, String, String, List[Double])]) = {
@@ -69,6 +70,7 @@ object BussinessHandle {
           jedis.hincrBy("20170412hour",t._1,t._2.toLong)
         }
         )
+        jedis.close()
       })
   }
 
@@ -78,23 +80,27 @@ object BussinessHandle {
     * @return
     */
   def result03(lines:RDD[(String, String, String, String, List[Double])]) = {
-    val conn = JDBCUtiles.getConn
+
     lines.map(data=>((data._2,data._4),List[Double](data._5(0),data._5(2))))
       .reduceByKey((list1,list2)=>list1.zip(list2).map(t=>t._1+t._2))
       .map(data=>(data._1._1,(data._1._2,data._2(0),data._2(1)/data._2(0))))
       .groupByKey()
-      .map(data=>(data._1,data._2.toList.sortBy(t=>t._2).map(t=>(t._1,t._3))))
+      .map(data=>(data._1,data._2.toList.sortBy(t=>t._2).map(t=>(t._1,t._3)).take(10)))
       .foreachPartition(f=>{
+        val conn = JDBCUtiles.getConn
+        val stat = conn.createStatement()
         //保存（时间，List（（省份，成功率），（）））
         var sql = "INSERT INTO result03 (hourtime  ,pro_one ,succrate_one ,pro_two ,succrate_two ,pro_three ,succrate_three ,pro_four ,succrate_four ,pro_five ,succrate_five ,pro_six ,succrate_six ,pro_seven ,succrate_seven ,pro_eight ,succrate_eight ,pro_nine ,succrate_nine,pro_ten,succrate_ten ) VALUES ("
           f.foreach(lines=>{
             sql += lines._1
             for(elem<-lines._2) {
-              sql += ","+elem._1+","+elem._2
+              sql += ",'"+elem._1+"',"+elem._2
             }
             sql += ")"
-            conn.prepareStatement(sql)
+            println(sql)
+            stat.execute(sql)
           })
+        JDBCUtiles.closeConn(conn)
       })
   }
   /**
@@ -108,3 +114,9 @@ object BussinessHandle {
       })
   }
 }
+//object Test extends App{
+//  val conn = JDBCUtiles.getConn
+//  val stat = conn.createStatement()
+//  stat.execute("INSERT INTO result03 (hourtime  ,pro_one ,succrate_one ,pro_two ,succrate_two ,pro_three ,succrate_three ,pro_four ,succrate_four ,pro_five ,succrate_five ,pro_six ,succrate_six ,pro_seven ,succrate_seven ,pro_eight ,succrate_eight ,pro_nine ,succrate_nine,pro_ten,succrate_ten ) VALUES (2017041206,'新疆',1.0,'云南',1.0,'贵州',1.0,'天津',1.0,'上海',1.0,'青海',1.0,'浙江',1.0,'安徽',1.0,'甘肃',1.0,'福建',1.0)")
+//  conn.close()
+//}
