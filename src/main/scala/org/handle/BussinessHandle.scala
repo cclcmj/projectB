@@ -1,6 +1,6 @@
 package org.handle
 
-import org.Utils.{JedisConnectionPool, TimeSubUtils}
+import org.Utils.{JDBCUtiles, JedisConnectionPool, TimeSubUtils}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.spark.rdd
 import org.apache.spark.rdd.RDD
@@ -17,7 +17,7 @@ object BussinessHandle {
     resrdd.map(_.value()).foreach(println)
   }
   //将stream转换为需要的参数（天，时，分钟，省份，List（订单数，充值金额，充值成功数，时长））
-  def middleArgsRDD(initrdd: RDD[ConsumerRecord[String, String]],cityMap:Map[String,String]): RDD[(String, String, String, String, List[Double])] ={
+  def middleArgsRDD(cityMap:Map[String,String],initrdd: RDD[ConsumerRecord[String, String]]): RDD[(String, String, String, String, List[Double])] ={
     //解析JSON
     initrdd.map(_.value()).map(t=>JSON.parseFull(t).get.asInstanceOf[Map[String,Any]])
     //过滤需要的数据
@@ -78,6 +78,7 @@ object BussinessHandle {
     * @return
     */
   def result03(lines:RDD[(String, String, String, String, List[Double])]) = {
+    val conn = JDBCUtiles.getConn
     lines.map(data=>((data._2,data._4),List[Double](data._5(0),data._5(2))))
       .reduceByKey((list1,list2)=>list1.zip(list2).map(t=>t._1+t._2))
       .map(data=>(data._1._1,(data._1._2,data._2(0),data._2(1)/data._2(0))))
@@ -85,6 +86,15 @@ object BussinessHandle {
       .map(data=>(data._1,data._2.toList.sortBy(t=>t._2).map(t=>(t._1,t._3))))
       .foreachPartition(f=>{
         //保存（时间，List（（省份，成功率），（）））
+        var sql = "INSERT INTO result03 (hourtime  ,pro_one ,succrate_one ,pro_two ,succrate_two ,pro_three ,succrate_three ,pro_four ,succrate_four ,pro_five ,succrate_five ,pro_six ,succrate_six ,pro_seven ,succrate_seven ,pro_eight ,succrate_eight ,pro_nine ,succrate_nine,pro_ten,succrate_ten ) VALUES ("
+          f.foreach(lines=>{
+            sql += lines._1
+            for(elem<-lines._2) {
+              sql += ","+elem._1+","+elem._2
+            }
+            sql += ")"
+            conn.prepareStatement(sql)
+          })
       })
   }
   /**

@@ -1,8 +1,7 @@
 package org.handle
 
-import org.Utils.{ConfigManager, JedisConnectionPool, StreamDirect}
+import org.Utils.{ConfigManager, StreamDirect}
 import org.apache.spark.SparkConf
-import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 
 import scala.io.Source
@@ -22,8 +21,11 @@ object BussinessApp extends App {
   val broad = ssc.sparkContext.broadcast(citymap)
   val stream = StreamDirect.getStream(ssc)
   stream.foreachRDD(rdd=>StreamDirect.handleAndSaveOffset(rdd
-    ,BussinessHandle.middleArgsRDD
-    ,BussinessHandle.result01_01))
+    ,(BussinessHandle.middleArgsRDD _).curried(broad.value)
+    ,BussinessHandle.result01_01
+    ,BussinessHandle.result01_02
+    ,BussinessHandle.result02
+    ,BussinessHandle.result03))
   ssc.start()
   ssc.awaitTermination()
 }

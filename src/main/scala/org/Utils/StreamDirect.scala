@@ -56,7 +56,7 @@ object StreamDirect {
   //处理数据并保存offset,Stream.foreachRDD(saveNewOffset)
   //输入funcs可变参数为处理数据（rdd）的方法
   def handleAndSaveOffset(rdd: RDD[ConsumerRecord[String, String]],
-                          middleArgsFunc:((RDD[ConsumerRecord[String, String]],Map[String,String])=>RDD[(String, String, String, String, List[Double])]),
+                          middleArgsFunc:((RDD[ConsumerRecord[String, String]])=>RDD[(String, String, String, String, List[Double])]),
                           funcs:(RDD[(String, String, String, String, List[Double])]=>Unit)*) = {
     val offsetRange = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
     //处理rdd

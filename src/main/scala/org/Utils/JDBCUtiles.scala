@@ -1,14 +1,11 @@
 package org.Utils
 
-import java.util.Properties
+import java.sql.{Connection, DriverManager}
+
 
 object JDBCUtiles {
-  def getJdbcProp = {
-    val prop = new Properties()
-    prop.put("user",ConfigManager.getProp("jdbc.user"))
-    prop.put("password",ConfigManager.getProp("jdbc.password"))
-    prop.put("driver",ConfigManager.getProp("jdbc.driver"))
-    val jdbcUrl = ConfigManager.getProp("jdbc.url")
-    (prop,jdbcUrl)
+  def getConn: Connection = {
+    Class.forName(ConfigManager.getProp("jdbc.driver"))
+    DriverManager.getConnection(ConfigManager.getProp("jdbc.url"),ConfigManager.getProp("jdbc.user"),ConfigManager.getProp("jdbc.password"))
   }
 }
